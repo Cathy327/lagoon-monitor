@@ -83,4 +83,4 @@ Developed as part of the University of Melbourne Faculty of Science Industry Pro
 
 ---
 
-University of Melbourne · EPA VIC · 2024–2026
+University of Melbourne · EPA VIC · 2026
