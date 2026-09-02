@@ -48,6 +48,7 @@ The `data/` folder (satellite images, time series CSV, metadata) is not included
 
 ### Updating Data
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Cathy327/lagoon-monitor/blob/main/update_data.ipynb)
 1. Click the **Open in Colab** button above.
 2. Log in with the provided Google account.
 3. Click **Runtime → Run all**.
