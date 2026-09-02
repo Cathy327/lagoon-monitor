@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lagoon Water Quality Monitor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="data/dashboard_data.js"></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   Apple-inspired light theme with translucent materials
+   ============================================================ */
+:root {
+  --bg: #f5f5f7;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: #ffffff;
+  --surface-hover: rgba(255, 255, 255, 0.85);
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --fai-color: #06b6d4;
+  --fai-light: rgba(6, 182, 212, 0.12);
+  --ndci-color: #8b5cf6;
+  --ndci-light: rgba(139, 92, 246, 0.12);
+  --danger: #ff3b30;
+  --warning: #ff9500;
+  --success: #34c759;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05);
+  --blur: blur(20px) saturate(180%);
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  --max-width: 1200px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   NAV BAR — fixed, translucent
+   ============================================================ */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+nav h1 {
+  font-size: 17px; font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.nav-status {
+  font-size: 13px; color: var(--text-secondary);
+  font-family: var(--mono);
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-status .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  display: inline-block;
+}
+.dot-green { background: var(--success); }
+.dot-amber { background: var(--warning); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 72px 24px 48px;
+}
+.section { margin-bottom: 40px; }
+.section-title {
+  font-size: 22px; font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+.section-subtitle {
+  font-size: 14px; color: var(--text-secondary);
+  margin-top: -12px; margin-bottom: 16px;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--surface-solid);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+.card-title {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   DATE CONTROLS
+   ============================================================ */
+.date-controls {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 16px;
+}
+.date-controls select {
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  min-width: 150px;
+}
+.date-controls select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+.btn-arrow {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--text-secondary);
+  transition: all 0.15s;
+}
+.btn-arrow:hover { background: var(--bg); color: var(--text-primary); }
+.btn-arrow:active { transform: scale(0.96); }
+
+/* ============================================================
+   MAP GRID
+   ============================================================ */
+.map-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.map-panel { position: relative; }
+.map-panel .map-label {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.map-panel .map-label .indicator {
+  width: 8px; height: 8px; border-radius: 2px;
+}
+.map-container {
+  height: 360px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.colorbar-wrap {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px;
+}
+.colorbar-label {
+  font-size: 11px; color: var(--text-tertiary);
+  font-family: var(--mono);
+  min-width: 32px;
+}
+.colorbar-gradient {
+  flex: 1; height: 6px; border-radius: 3px;
+}
+
+/* ============================================================
+   3-YEAR COMPARISON
+   ============================================================ */
+.compare-controls {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 16px;
+}
+.compare-controls label {
+  font-size: 13px; color: var(--text-secondary);
+}
+.year-row {
+  margin-bottom: 16px;
+}
+.year-row-header {
+  font-size: 14px; font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-family: var(--mono);
+}
+.year-row-images {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding-bottom: 4px;
+}
+.year-row-images .thumb-card {
+  flex-shrink: 0;
+  width: 120px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.thumb-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.thumb-card:active { transform: scale(0.98); }
+.thumb-card img {
+  width: 100%; height: 80px;
+  object-fit: contain;
+  background: #e8e8ed;
+}
+.thumb-card .thumb-date {
+  font-size: 10px; font-family: var(--mono);
+  color: var(--text-secondary);
+  padding: 4px 6px;
+  text-align: center;
+}
+.no-data-msg {
+  font-size: 13px; color: var(--text-tertiary);
+  font-style: italic;
+  padding: 12px 0;
+}
+.compare-pair {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+}
+
+/* ============================================================
+   CHARTS
+   ============================================================ */
+.chart-wrap {
+  position: relative;
+}
+.chart-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 260px;
+}
+.chart-legend {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: 8px;
+}
+.chart-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.chart-legend-item .swatch {
+  width: 12px; height: 3px; border-radius: 2px;
+}
+.charts-grid {
+  display: grid; grid-template-columns: 1fr; gap: 16px;
+}
+
+/* ============================================================
+   BLOOM EVENTS
+   ============================================================ */
+.bloom-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.btn-primary {
+  font-family: var(--font);
+  font-size: 13px; font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { transform: scale(0.97); }
+.btn-secondary {
+  font-family: var(--font);
+  font-size: 13px; font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.bloom-form {
+  display: none;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.bloom-form.open { display: block; }
+.form-row {
+  display: grid; grid-template-columns: 1fr 1fr 2fr;
+  gap: 12px; margin-bottom: 12px;
+}
+.form-group label {
+  display: block; font-size: 12px;
+  color: var(--text-secondary); margin-bottom: 4px;
+}
+.form-group input, .form-group select {
+  width: 100%; padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-family: var(--font); font-size: 13px;
+  background: var(--surface-solid);
+  color: var(--text-primary);
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,113,227,0.15);
+}
+.bloom-list { display: flex; flex-direction: column; gap: 6px; }
+.bloom-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface-solid);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-tertiary);
+}
+.bloom-item.high { border-left-color: var(--danger); }
+.bloom-item.medium { border-left-color: var(--warning); }
+.bloom-item.low { border-left-color: var(--success); }
+.bloom-item .bloom-date {
+  font-family: var(--mono); font-size: 13px;
+  color: var(--text-primary); min-width: 90px;
+}
+.bloom-item .bloom-severity {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 99px;
+}
+.bloom-item .bloom-severity.high { background: #ffe5e5; color: var(--danger); }
+.bloom-item .bloom-severity.medium { background: #fff3e0; color: #e67e00; }
+.bloom-item .bloom-severity.low { background: #e8f5e9; color: #2e7d32; }
+.bloom-item .bloom-note {
+  flex: 1; font-size: 13px; color: var(--text-secondary);
+}
+.bloom-item .bloom-remove {
+  background: none; border: none;
+  color: var(--text-tertiary); cursor: pointer;
+  font-size: 14px; padding: 4px;
+}
+.bloom-item .bloom-remove:hover { color: var(--danger); }
+.empty-state {
+  text-align: center; padding: 32px;
+  color: var(--text-tertiary); font-size: 13px;
+}
+
+/* ============================================================
+   IMAGE MODAL
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-content {
+  background: var(--surface-solid);
+  border-radius: var(--radius);
+  padding: 20px;
+  max-width: 600px; max-height: 80vh;
+  box-shadow: var(--shadow-md);
+}
+.modal-content img { max-width: 100%; border-radius: var(--radius-sm); }
+.modal-content .modal-title {
+  font-size: 14px; font-weight: 600;
+  margin-bottom: 12px; color: var(--text-primary);
+}
+.modal-close {
+  position: absolute; top: 16px; right: 20px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,0.8); border: none;
+  font-size: 16px; cursor: pointer; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+}
+.leaflet-image-layer {
+  image-rendering: pixelated;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer {
+  text-align: center;
+  padding: 24px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  .map-grid, .compare-pair { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .map-container { height: 260px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <h1>Lagoon Water Quality Monitor</h1>
+  <div class="nav-status" id="nav-status"></div>
+</nav>
+
+<!-- MAIN -->
+<main>
+
+  <!-- MODULE 1: MAP BROWSER -->
+  <section class="section">
+    <div class="section-title">Satellite Imagery</div>
+    <div class="date-controls">
+      <button class="btn-arrow" id="btn-prev" title="Previous date">‹</button>
+      <select id="date-select"></select>
+      <button class="btn-arrow" id="btn-next" title="Next date">›</button>
+    </div>
+    <div class="card">
+      <div class="map-grid">
+        <div class="map-panel">
+          <div class="map-label"><span class="indicator" style="background:var(--fai-color)"></span>FAI — Floating Algae Index</div>
+          <div id="map-fai" class="map-container"></div>
+          <div class="colorbar-wrap">
+            <span class="colorbar-label" style="text-align:right">-0.05</span>
+            <canvas id="cb-fai" class="colorbar-gradient" height="6"></canvas>
+            <span class="colorbar-label">0.15</span>
+          </div>
+        </div>
+        <div class="map-panel">
+          <div class="map-label"><span class="indicator" style="background:var(--ndci-color)"></span>NDCI — Normalised Difference Chlorophyll Index</div>
+          <div id="map-ndci" class="map-container"></div>
+          <div class="colorbar-wrap">
+            <span class="colorbar-label" style="text-align:right">-0.1</span>
+            <canvas id="cb-ndci" class="colorbar-gradient" height="6"></canvas>
+            <span class="colorbar-label">0.5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2: 3-YEAR COMPARISON -->
+  <section class="section">
+    <div class="section-title">Three-Year Comparison</div>
+    <div class="compare-controls">
+      <label>Window ending</label>
+      <select id="compare-date-select"></select>
+      <span style="font-size:13px;color:var(--text-tertiary)">(shows one month prior)</span>
+    </div>
+    <div class="card">
+      <div class="compare-pair">
+        <div>
+          <div class="card-title" style="color:var(--fai-color)">FAI</div>
+          <div id="compare-fai"></div>
+        </div>
+        <div>
+          <div class="card-title" style="color:var(--ndci-color)">NDCI</div>
+          <div id="compare-ndci"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 3: TREND CHARTS -->
+  <section class="section">
+    <div class="section-title">Trend Analysis</div>
+    <div class="section-subtitle">Full time series with standard deviation bands. Highlighted regions correspond to the comparison window above.</div>
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title" style="color:var(--fai-color)">FAI Time Series</div>
+        <div class="chart-wrap"><canvas id="chart-fai"></canvas></div>
+        <div class="chart-legend">
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--fai-color)"></span>Mean</div>
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--fai-light);height:8px"></span>±1 StdDev</div>
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--danger);height:2px"></span>Bloom event</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color:var(--ndci-color)">NDCI Time Series</div>
+        <div class="chart-wrap"><canvas id="chart-ndci"></canvas></div>
+        <div class="chart-legend">
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--ndci-color)"></span>Mean</div>
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--ndci-light);height:8px"></span>±1 StdDev</div>
+          <div class="chart-legend-item"><span class="swatch" style="background:var(--danger);height:2px"></span>Bloom event</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 5: BLOOM EVENTS -->
+  <section class="section">
+    <div class="section-title">Bloom Event Log</div>
+    <div class="bloom-header">
+      <div class="section-subtitle" style="margin:0">Manual records of observed algal bloom events</div>
+      <button class="btn-primary" id="btn-add-bloom">Record event</button>
+    </div>
+    <div class="bloom-form" id="bloom-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="bloom-date"/>
+        </div>
+        <div class="form-group">
+          <label>Severity</label>
+          <select id="bloom-severity">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" id="bloom-note" placeholder="Visual observations, lab data..."/>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" id="btn-save-bloom">Save</button>
+        <button class="btn-secondary" id="btn-cancel-bloom">Cancel</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="bloom-list" id="bloom-list"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  University of Melbourne · EPA VIC · Sentinel-2 Data via Google Earth Engine
+</footer>
+
+<!-- IMAGE MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-content" style="position:relative">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div class="modal-title" id="modal-title"></div>
+    <img id="modal-img" src="" alt=""/>
+  </div>
+</div>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let currentDateIndex = DATES.length - 1;
+let faiMap = null, ndciMap = null;
+let faiOverlay = null, ndciOverlay = null;
+let bloomEvents = [];
+const SW = BOUNDS.southwest;
+const NE = BOUNDS.northeast;
+const MAP_BOUNDS = [[SW[1], SW[0]], [NE[1], NE[0]]];
+const MAP_CENTER = [(SW[1]+NE[1])/2, (SW[0]+NE[0])/2];
+
+// Load bloom events from localStorage
+try {
+  const saved = localStorage.getItem('bloom_events');
+  if (saved) bloomEvents = JSON.parse(saved);
+} catch(e) {}
+
+// ============================================================
+// NAV STATUS
+// ============================================================
+function updateNavStatus() {
+  const latest = DATES[DATES.length - 1];
+  const latestDate = new Date(latest);
+  const now = new Date();
+  const diffDays = Math.floor((now - latestDate) / (1000*60*60*24));
+
+  // Count images in last 30 days
+  const thirtyAgo = new Date(now);
+  thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+  const recentCount = DATES.filter(d => new Date(d) >= thirtyAgo).length;
+
+  const statusEl = document.getElementById('nav-status');
+  if (recentCount > 0) {
+    statusEl.innerHTML = `<span class="dot dot-green"></span>${recentCount} images in last 30 days · Latest: ${latest}`;
+  } else {
+    statusEl.innerHTML = `<span class="dot dot-amber"></span>No images in last 30 days (cloud cover) · Latest: ${latest}`;
+  }
+}
+
+// ============================================================
+// DATE SELECTOR
+// ============================================================
+function initDateSelect() {
+  const select = document.getElementById('date-select');
+  DATES.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = d;
+    select.appendChild(opt);
+  });
+  select.value = currentDateIndex;
+  select.addEventListener('change', () => {
+    currentDateIndex = parseInt(select.value);
+    updateMaps();
+  });
+
+  document.getElementById('btn-prev').addEventListener('click', () => {
+    if (currentDateIndex > 0) {
+      currentDateIndex--;
+      select.value = currentDateIndex;
+      updateMaps();
+    }
+  });
+  document.getElementById('btn-next').addEventListener('click', () => {
+    if (currentDateIndex < DATES.length - 1) {
+      currentDateIndex++;
+      select.value = currentDateIndex;
+      updateMaps();
+    }
+  });
+}
+
+// ============================================================
+// MAPS
+// ============================================================
+function initMaps() {
+const mapOpts = {
+    center: MAP_CENTER, zoom: 16,
+    zoomControl: true, attributionControl: false
+};
+
+  faiMap = L.map('map-fai', mapOpts);
+  ndciMap = L.map('map-ndci', mapOpts);
+
+  const tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(faiMap);
+  L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(ndciMap);
+
+  // Sync map movements
+  faiMap.on('move', () => {
+    ndciMap.setView(faiMap.getCenter(), faiMap.getZoom(), { animate: false });
+  });
+  ndciMap.on('move', () => {
+    faiMap.setView(ndciMap.getCenter(), ndciMap.getZoom(), { animate: false });
+  });
+
+  updateMaps();
+}
+
+function updateMaps() {
+  const date = DATES[currentDateIndex];
+  const faiSrc = `data/images/fai/fai_${date}.png`;
+  const ndciSrc = `data/images/ndci/ndci_${date}.png`;
+
+  if (faiOverlay) faiMap.removeLayer(faiOverlay);
+  if (ndciOverlay) ndciMap.removeLayer(ndciOverlay);
+
+  faiOverlay = L.imageOverlay(faiSrc, MAP_BOUNDS, { opacity: 0.85 }).addTo(faiMap);
+  ndciOverlay = L.imageOverlay(ndciSrc, MAP_BOUNDS, { opacity: 0.85 }).addTo(ndciMap);
+}
+
+// ============================================================
+// COLORBARS
+// ============================================================
+function drawColorbar(canvasId, colors, min, max) {
+  const canvas = document.getElementById(canvasId);
+  const parent = canvas.parentElement;
+  canvas.width = parent.clientWidth - 80;
+  canvas.height = 6;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  const palette = ['#0000ff','#00ffff','#00ff00','#ffff00','#ff8c00','#ff0000'];
+  palette.forEach((c, i) => grad.addColorStop(i / (palette.length - 1), c));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, canvas.width, 6, 3);
+  ctx.fill();
+}
+
+// ============================================================
+// 3-YEAR COMPARISON
+// ============================================================
+function initCompare() {
+  const select = document.getElementById('compare-date-select');
+  DATES.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    select.appendChild(opt);
+  });
+  select.value = DATES[DATES.length - 1];
+  select.addEventListener('change', () => {
+    updateCompare();
+    drawCharts();
+  });
+  updateCompare();
+}
+
+function updateCompare() {
+  const endDate = document.getElementById('compare-date-select').value;
+  const endMD = endDate.slice(5); // MM-DD
+  const endD = new Date(endDate);
+  const startD = new Date(endD);
+  startD.setMonth(startD.getMonth() - 1);
+  const startMD = startD.toISOString().slice(5, 10);
+
+  const years = [2024, 2025, 2026];
+  const faiContainer = document.getElementById('compare-fai');
+  const ndciContainer = document.getElementById('compare-ndci');
+  faiContainer.innerHTML = '';
+  ndciContainer.innerHTML = '';
+
+  years.forEach(year => {
+    const yearDates = DATES.filter(d => {
+      if (!d.startsWith(String(year))) return false;
+      const md = d.slice(5);
+      return md >= startMD && md <= endMD;
+    });
+
+    // FAI column
+    const faiRow = document.createElement('div');
+    faiRow.className = 'year-row';
+    faiRow.innerHTML = `<div class="year-row-header">${year}</div>`;
+    const faiImages = document.createElement('div');
+    faiImages.className = 'year-row-images';
+
+    if (yearDates.length === 0) {
+      faiImages.innerHTML = '<div class="no-data-msg">No data available</div>';
+    } else {
+      yearDates.forEach(d => {
+        const card = document.createElement('div');
+        card.className = 'thumb-card';
+        card.innerHTML = `<img src="data/images/fai/fai_${d}.png" alt="FAI ${d}" onerror="this.src='';this.alt='Missing'"/><div class="thumb-date">${d.slice(5)}</div>`;
+        card.addEventListener('click', () => openModal(`FAI — ${d}`, `data/images/fai/fai_${d}.png`));
+        faiImages.appendChild(card);
+      });
+    }
+    faiRow.appendChild(faiImages);
+    faiContainer.appendChild(faiRow);
+
+    // NDCI column
+    const ndciRow = document.createElement('div');
+    ndciRow.className = 'year-row';
+    ndciRow.innerHTML = `<div class="year-row-header">${year}</div>`;
+    const ndciImages = document.createElement('div');
+    ndciImages.className = 'year-row-images';
+
+    if (yearDates.length === 0) {
+      ndciImages.innerHTML = '<div class="no-data-msg">No data available</div>';
+    } else {
+      yearDates.forEach(d => {
+        const card = document.createElement('div');
+        card.className = 'thumb-card';
+        card.innerHTML = `<img src="data/images/ndci/ndci_${d}.png" alt="NDCI ${d}" onerror="this.src='';this.alt='Missing'"/><div class="thumb-date">${d.slice(5)}</div>`;
+        card.addEventListener('click', () => openModal(`NDCI — ${d}`, `data/images/ndci/ndci_${d}.png`));
+        ndciImages.appendChild(card);
+      });
+    }
+    ndciRow.appendChild(ndciImages);
+    ndciContainer.appendChild(ndciRow);
+  });
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openModal(title, src) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-img').src = src;
+  document.getElementById('modal').classList.add('open');
+}
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('modal').classList.remove('open');
+});
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) document.getElementById('modal').classList.remove('open');
+});
+
+// ============================================================
+// CHARTS
+// ============================================================
+function drawCharts() {
+  drawTimeSeries('chart-fai', 'FAI_mean', 'FAI_stdDev', '#06b6d4', 'rgba(6,182,212,0.12)');
+  drawTimeSeries('chart-ndci', 'NDCI_mean', 'NDCI_stdDev', '#8b5cf6', 'rgba(139,92,246,0.12)');
+}
+
+function drawTimeSeries(canvasId, meanKey, stdKey, color, bandColor) {
+  const canvas = document.getElementById(canvasId);
+  const parent = canvas.parentElement;
+  canvas.width = parent.clientWidth;
+  canvas.height = 260;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { top: 16, right: 16, bottom: 44, left: 52 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  const data = TIMESERIES;
+  const means = data.map(d => d[meanKey]);
+  const stds = data.map(d => d[stdKey]);
+  const dates = data.map(d => d.date);
+
+  // Y range from data
+  let minY = Infinity, maxY = -Infinity;
+  data.forEach((d, i) => {
+    const lo = (d[meanKey] || 0) - (d[stdKey] || 0);
+    const hi = (d[meanKey] || 0) + (d[stdKey] || 0);
+    if (lo < minY) minY = lo;
+    if (hi > maxY) maxY = hi;
+  });
+  const yPad = (maxY - minY) * 0.1;
+  minY -= yPad; maxY += yPad;
+  const rangeY = maxY - minY || 0.01;
+
+  function xPos(i) { return pad.left + (i / (data.length - 1)) * plotW; }
+  function yPos(v) { return pad.top + plotH - ((v - minY) / rangeY) * plotH; }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Comparison window highlights
+  const endDate = document.getElementById('compare-date-select').value;
+  const endD = new Date(endDate);
+  const startD = new Date(endD); startD.setMonth(startD.getMonth() - 1);
+  const startMD = startD.toISOString().slice(5, 10);
+  const endMD = endDate.slice(5);
+
+  const yearColors = { '2024': 'rgba(6,182,212,0.08)', '2025': 'rgba(52,199,89,0.08)', '2026': 'rgba(255,149,0,0.08)' };
+  [2024, 2025, 2026].forEach(year => {
+    let firstIdx = -1, lastIdx = -1;
+    dates.forEach((d, i) => {
+      if (d.startsWith(String(year)) && d.slice(5) >= startMD && d.slice(5) <= endMD) {
+        if (firstIdx === -1) firstIdx = i;
+        lastIdx = i;
+      }
+    });
+    if (firstIdx >= 0) {
+      ctx.fillStyle = yearColors[String(year)];
+      const x1 = xPos(firstIdx) - 4;
+      const x2 = xPos(lastIdx) + 4;
+      ctx.fillRect(x1, pad.top, x2 - x1, plotH);
+    }
+  });
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * plotH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#aeaeb2'; ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const val = maxY - (i / 4) * rangeY;
+    ctx.fillText(val.toFixed(3), pad.left - 8, y);
+  }
+
+  // X labels
+  const labelStep = Math.max(1, Math.floor(data.length / 8));
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  dates.forEach((d, i) => {
+    if (i % labelStep === 0 || i === data.length - 1) {
+      ctx.fillStyle = '#aeaeb2';
+      ctx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+      ctx.save();
+      ctx.translate(xPos(i), H - pad.bottom + 6);
+      ctx.rotate(-0.4);
+      ctx.fillText(d.slice(2), 0, 0); // YY-MM-DD
+      ctx.restore();
+    }
+  });
+
+  // StdDev band
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const upper = (d[meanKey] || 0) + (d[stdKey] || 0);
+    i === 0 ? ctx.moveTo(xPos(i), yPos(upper)) : ctx.lineTo(xPos(i), yPos(upper));
+  });
+  for (let i = data.length - 1; i >= 0; i--) {
+    const lower = (data[i][meanKey] || 0) - (data[i][stdKey] || 0);
+    ctx.lineTo(xPos(i), yPos(lower));
+  }
+  ctx.closePath();
+  ctx.fillStyle = bandColor;
+  ctx.fill();
+
+  // Bloom event markers
+  const firstTime = new Date(dates[0]).getTime();
+  const lastTime = new Date(dates[dates.length - 1]).getTime();
+  const timeRange = lastTime - firstTime || 1;
+
+  bloomEvents.forEach(ev => {
+    const evTime = new Date(ev.date).getTime();
+    if (evTime >= firstTime && evTime <= lastTime) {
+      const xRatio = (evTime - firstTime) / timeRange;
+      const x = pad.left + xRatio * plotW;
+      ctx.strokeStyle = ev.severity === 'high' ? '#ff3b30' : ev.severity === 'medium' ? '#ff9500' : '#34c759';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  });
+
+  // Mean line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const v = d[meanKey] || 0;
+    i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v));
+  });
+  ctx.stroke();
+
+  // Data points
+  data.forEach((d, i) => {
+    const v = d[meanKey] || 0;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(xPos(i), yPos(v), 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// ============================================================
+// BLOOM EVENTS
+// ============================================================
+function initBlooms() {
+  document.getElementById('bloom-date').value = new Date().toISOString().split('T')[0];
+
+  document.getElementById('btn-add-bloom').addEventListener('click', () => {
+    document.getElementById('bloom-form').classList.toggle('open');
+  });
+  document.getElementById('btn-cancel-bloom').addEventListener('click', () => {
+    document.getElementById('bloom-form').classList.remove('open');
+  });
+  document.getElementById('btn-save-bloom').addEventListener('click', () => {
+    const date = document.getElementById('bloom-date').value;
+    const severity = document.getElementById('bloom-severity').value;
+    const note = document.getElementById('bloom-note').value || 'No notes';
+    if (!date) return;
+    bloomEvents.push({ id: Date.now(), date, severity, note });
+    saveBlooms();
+    document.getElementById('bloom-form').classList.remove('open');
+    document.getElementById('bloom-note').value = '';
+    renderBlooms();
+    drawCharts();
+  });
+  renderBlooms();
+}
+
+function saveBlooms() {
+  try { localStorage.setItem('bloom_events', JSON.stringify(bloomEvents)); } catch(e) {}
+}
+
+function renderBlooms() {
+  const list = document.getElementById('bloom-list');
+  if (bloomEvents.length === 0) {
+    list.innerHTML = '<div class="empty-state">No bloom events recorded yet.</div>';
+    return;
+  }
+  const sorted = [...bloomEvents].sort((a, b) => b.date.localeCompare(a.date));
+  list.innerHTML = sorted.map(ev => `
+    <div class="bloom-item ${ev.severity}">
+      <span class="bloom-date">${ev.date}</span>
+      <span class="bloom-severity ${ev.severity}">${ev.severity.charAt(0).toUpperCase() + ev.severity.slice(1)}</span>
+      <span class="bloom-note">${ev.note}</span>
+      <button class="bloom-remove" onclick="removeBloom(${ev.id})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+window.removeBloom = function(id) {
+  bloomEvents = bloomEvents.filter(e => e.id !== id);
+  saveBlooms();
+  renderBlooms();
+  drawCharts();
+};
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('load', () => {
+  updateNavStatus();
+  initDateSelect();
+  initMaps();
+  drawColorbar('cb-fai');
+  drawColorbar('cb-ndci');
+  initCompare();
+  drawCharts();
+  initBlooms();
+});
+
+window.addEventListener('resize', () => {
+  drawCharts();
+  drawColorbar('cb-fai');
+  drawColorbar('cb-ndci');
+});
+</script>
+</body>
+</html>
